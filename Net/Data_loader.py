@@ -12,11 +12,16 @@ def transformer_list(params):
     Rare_transformer = transforms.Compose([
         transforms.RandomHorizontalFlip(),  # randomly flip image horizontally
         transforms.RandomVerticalFlip(),  # randomly flip image vertically
-        transforms.RandomRotation(180), # randomly rotate image by 180 degrees
+        transforms.RandomRotation(180, fill=(0,)), # randomly rotate image by 180 degrees
         transforms.Grayscale(num_output_channels=params.num_input_channels), # convert RGB image to greyscale (optional, 1 vs. 3 channels)
+	transforms.Resize((256,256)),
         transforms.ToTensor()])  # transform it into a torch tensor
     Major_transformer = transforms.Compose([
+        transforms.RandomHorizontalFlip(),  # randomly flip image horizontally
+        transforms.RandomVerticalFlip(),  # randomly flip image vertically
+        transforms.RandomRotation(180, fill=(0,)), # randomly rotate image by 180 degrees
         transforms.Grayscale(num_output_channels=params.num_input_channels), # convert RGB image to greyscale (optional, 1 vs. 3 channels)
+	transforms.Resize((256,256)),
         transforms.ToTensor()])  # transform it into a torch tensor
     return Rare_transformer, Major_transformer
 
@@ -64,6 +69,9 @@ class FundusDataset(Dataset):
             image = self.transform[0](image)
         else:
             image = self.transform[1](image)
+        siz, width, height = image.size()
+        #print(image.size())
+        #assert width == 224 and height == 224, '{},{} of image {}'.format(width, height, self.filenames[idx])
         return image, self.labels[idx], self.filenames[idx]
 
 

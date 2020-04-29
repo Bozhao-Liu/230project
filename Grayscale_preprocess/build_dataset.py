@@ -92,9 +92,9 @@ if __name__ == '__main__':
 	
 	Create_filter(filename, args.filter_dir, image_filter)'''
 	filter_img = Image.open(os.path.join(args.filter_dir, image_filter.split('\\')[-1]))
-	height = 224
+	height = 256
 	#hpercent = float(height/float(filter_img.size[1]))
-	width = 224
+	width = 256
 	resize_images(filter_img, width = width, height = height)
 	
 	print("Done building dataset")

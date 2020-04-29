@@ -29,14 +29,18 @@ parser.add_argument('--model_dir', default='experiments',
                     help="Directory containing params.json")
 parser.add_argument('--print-freq', '-p', default=50, type=int,
                     metavar='N', help='print frequency (default: 10)')
-parser.add_argument('--resume', default=False, type=str, metavar='PATH',
+parser.add_argument('--resume', default=True, type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
 parser.add_argument('--network', type=str,
                     help='select network to train on. (no default, must be specified)')
 parser.add_argument('--log', default='warning', type=str,
                     help='set logging level')
+parser.add_argument('--loss', type=str, default = 'BCE',
+			help='select loss function to train with. ')
 parser.add_argument('--threshold', default=0.5, type=float,
                     help='the threshold of the prediction')
+parser.add_argument('--lrDecay', default=1, type=float,
+			help='learning rate decay rate')
 
 
 
@@ -74,14 +78,14 @@ def main():
     
     model.cuda()
     # define loss function and optimizer
-    loss = model_loader.Exp_UEW_BCE_loss
+    loss = model_loader.get_loss(args.loss)
     optimizer = torch.optim.Adam(model.parameters(), params.learning_rate, betas=(0.9, 0.999), eps=1e-08, weight_decay=params.weight_decay, amsgrad=False)
 
     cudnn.benchmark = True
     
     
     #resume checkpoint
-    checkpointfile = os.path.join(json_path, args.network + version + '.pth.tar')
+    checkpointfile = os.path.join(json_path, args.network + version + args.loss + str(args.lrDecay) + '.pth.tar')
     if args.resume:
         if os.path.isfile(checkpointfile):
             logging.info("Loading checkpoint {}".format(checkpointfile))
@@ -89,7 +93,7 @@ def main():
             args.start_epoch = checkpoint['epoch']
             best_F1 = checkpoint['best_F1']
             model.load_state_dict(checkpoint['state_dict'])
-            optimizer.load_state_dict(checkpoint['optimizer'])
+            #optimizer.load_state_dict(checkpoint['optimizer'])
             print("=> loaded checkpoint '{}' (epoch {})"
                   .format(checkpointfile, checkpoint['epoch']))
         else:
@@ -136,7 +140,12 @@ def main():
         }, is_best, path=json_path, filename=checkpointfile, version=version, network=args.network)
         if is_best:
             save_to_ini(params, args.model_dir, args.network, version, val_result, threshold = args.threshold)
+        learning_rate_decay(optimizer, args.lrDecay)
     validate(val_loader, model, loss, threshold = args.threshold)
+
+def learning_rate_decay(optimizer, decay_rate):
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = param_group['lr'] * decay_rate
         
 
 def train(train_loader, model, loss, optimizer, epoch, threshold = 0.5):
@@ -164,7 +173,7 @@ def train(train_loader, model, loss, optimizer, epoch, threshold = 0.5):
             # compute output
             logging.info("        Compute output")
             output = model(input_var).double()
-            cost = loss(output, label_var, (1, 1))
+            cost = loss(output, label_var)
     
             # measure accuracy and record cost
             logging.info("        Measure accuracy")
@@ -232,7 +241,7 @@ def validate(val_loader, model, loss, threshold = 0.5):
         # compute output
         logging.info("        Compute output")
         output = model(input_var).double()
-        cost = loss(output, label_var, (1, 1))
+        cost = loss(output, label_var)
 
         # measure accuracy and record cost
         logging.info("        Measure accuracy and record cost")
@@ -271,11 +280,11 @@ def validate(val_loader, model, loss, threshold = 0.5):
 def save_checkpoint(state, is_best, path, filename, version, network):
     torch.save(state, filename)
     if is_best:
-        shutil.copyfile(filename, os.path.join(path, network + version + '_model_best.pth.tar') )
+        shutil.copyfile(filename, os.path.join(path, network + version + args.loss + str(args.lrDecay) + '_model_best.pth.tar') )
 
 def save_to_ini(params, path, network, version, val_result, threshold):
     config = utils.ConfigParser()
-    section_name = network + str(version)
+    section_name = network + str(version) +'_'+ args.loss +str(args.lrDecay)
     config_name = os.path.join(path, 'BestCompare.ini')
     if os.path.isfile(config_name):
         config.read(config_name)
@@ -285,6 +294,7 @@ def save_to_ini(params, path, network, version, val_result, threshold):
             config.add_section(section_name)
     else:
         config.add_section(section_name)
+
     config.set(section_name, 'Diabetes Accuracy', str(val_result[0][0].avg))
     config.set(section_name, '    Diabetes F1', str(val_result[1][0]))
     config.set(section_name, '        Diabetes recall', str(val_result[1][1]))
